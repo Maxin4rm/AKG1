@@ -5,14 +5,16 @@ using System.Globalization;
 namespace AKG1;
 internal class ObjFileParser
 {
-    List<Vertex> _vertices = new();
-    List<Vector3> _normals = new();
-    List<Vector3> _textures = new();
-    List<Polygon> _faces = new();
+    public List<Vertex> _vertices = new();
+    public List<Vector3> _normals = new();
+    public List<Vector3> _textures = new();
+    public List<Polygon> _faces = new();
 
-    const string filePath = "..\\..\\..\\model.obj";
+    public List<Tuple<float, float>> _points = new();
 
-    public void ParseOBJFile()
+    //const string filePath = "..\\..\\..\\smile.obj";
+
+    public void ParseOBJFile(string filePath)
     {
         using (StreamReader reader = new StreamReader(filePath))
         {
@@ -22,29 +24,6 @@ internal class ObjFileParser
                 ParseLine(line);
             }
         }
-        /*Console.WriteLine("Vertices:");
-        foreach (string vertex in vertices)
-        {
-            Console.WriteLine(vertex);
-        }
-
-        Console.WriteLine("Normals:");
-        foreach (string normal in normals)
-        {
-            Console.WriteLine(normal);
-        }
-
-        Console.WriteLine("Textures:");
-        foreach (string texture in textures)
-        {
-            Console.WriteLine(texture);
-        }
-
-        Console.WriteLine("Faces:");
-        foreach (string face in faces)
-        {
-            Console.WriteLine(face);
-        }*/
     }
 
     #region parsing
@@ -116,11 +95,13 @@ internal class ObjFileParser
     public IEnumerable<Polygon> ParseTriangulatedPolygon(string[] inputValues)
     {
         var vertices = new List<Vertex>();
+        var indexes = new List<int>();
         foreach (var inputValue in inputValues)
         {
             var vertexValues = inputValue.Split('/');
 
             var index = int.Parse(vertexValues[0]);
+            indexes.Add(index);
             index = index < 0 ? _vertices.Count - Math.Abs(index) : index - 1;
 
             var vertex = _vertices[index];
@@ -141,16 +122,17 @@ internal class ObjFileParser
             vertices.Add(vertex);
         }
 
-        return TriangulatePolygon(vertices.ToArray());
+        return TriangulatePolygon(vertices.ToArray(), indexes.ToArray());
     }
 
-    private IEnumerable<Polygon> TriangulatePolygon(Vertex[] vertices)
+    private IEnumerable<Polygon> TriangulatePolygon(Vertex[] vertices, int[] indexes)
     {
         if (vertices.Length == 3)
         {
             return new Polygon[]
             {
-                new() { Vertices = vertices.ToList() }
+                new() { Vertices = vertices.ToList(), Indexes = indexes.ToList() }
+
             };
         }
 
@@ -181,7 +163,7 @@ internal class ObjFileParser
         }
         innerVertices.Add(vertices[0]);
 
-        polygons.AddRange(TriangulatePolygon(innerVertices.ToArray()));
+        polygons.AddRange(TriangulatePolygon(innerVertices.ToArray(), indexes));
         return polygons;
     }
 
