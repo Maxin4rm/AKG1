@@ -1,7 +1,6 @@
 ﻿using AKG1.Models;
 using System.Numerics;
 using System.Globalization;
-using System;
 
 namespace AKG1;
 internal class ObjFileParser
@@ -62,7 +61,8 @@ internal class ObjFileParser
 
     private Vertex ParseVertex(string[] inputValues)
     {
-        Vertex vertex = new();
+        Vertex vertex = new Vertex();
+
         vertex.Coordinates = new Vector3(float.Parse(inputValues[0], CultureInfo.InvariantCulture),
               float.Parse(inputValues[1], CultureInfo.InvariantCulture),
               float.Parse(inputValues[2], CultureInfo.InvariantCulture));
@@ -91,7 +91,7 @@ internal class ObjFileParser
             float.Parse(inputValues[1], CultureInfo.InvariantCulture),
             float.Parse(inputValues[2], CultureInfo.InvariantCulture));
     }
-    
+
     public IEnumerable<Polygon> ParseTriangulatedPolygon(string[] inputValues)
     {
         var vertices = new List<Vertex>();
@@ -138,7 +138,6 @@ internal class ObjFileParser
 
         var polygons = new List<Polygon>();
 
-        var innerIndexes = new List<int>();
         var innerVertices = new List<Vertex>();
 
         int index = 2;
@@ -146,7 +145,6 @@ internal class ObjFileParser
         {
             if (index % 2 == 0)
             {
-                innerIndexes.Add(indexes[index]);
                 innerVertices.Add(vertices[index]);
                 polygons.Add(new Polygon()
                 {
@@ -154,11 +152,6 @@ internal class ObjFileParser
                         vertices[index - 2],
                         vertices[index - 1],
                         vertices[index]
-                    },
-                    Indexes = new List<int> { 
-                        indexes[index - 2], 
-                        indexes[index - 1],
-                        indexes[index] 
                     }
                 });
             }
@@ -167,9 +160,7 @@ internal class ObjFileParser
         if (vertices.Length % 2 == 0)
         {
             innerVertices.Add(vertices[^1]);
-            innerIndexes.Add(indexes[^1]);
         }
-        innerIndexes.Add(indexes[0]);
         innerVertices.Add(vertices[0]);
 
         polygons.AddRange(TriangulatePolygon(innerVertices.ToArray(), indexes));

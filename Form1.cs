@@ -7,9 +7,9 @@ namespace AKG1
     public partial class Form1 : Form
     {
         List<Tuple<int, int, int>> projections = new();
-        const float cameraZ = 500.0f;
+        const float cameraZ = 0.0005f;
         
-        const string filePath = "..\\..\\..\\model1.obj";
+        const string filePath = "..\\..\\..\\smile.obj";
 
         ObjFileParser parser = new();
 
@@ -26,17 +26,15 @@ namespace AKG1
             parser.ParseOBJFile(filePath);
         }
 
-        private static Vector3 MultiplyVectorOnMatrix(Matrix4x4 matrix, Vector3 vector)
+        private Vector3 MultiplyVectorOnMatrix(Matrix4x4 matrix, Vector3 vector)
         {
-            Vector3 result = new(
-                matrix.M11 * vector.X + matrix.M21 * vector.Y + matrix.M31 * vector.Z + matrix.M41,
-                matrix.M12 * vector.X + matrix.M22 * vector.Y + matrix.M32 * vector.Z + matrix.M42,
-                matrix.M13 * vector.X + matrix.M23 * vector.Y + matrix.M33 * vector.Z + matrix.M43
+            Vector3 result = new Vector3(
+                matrix.M11 * vector.X + matrix.M21 * vector.Y + matrix.M31 * vector.Z,
+                matrix.M12 * vector.X + matrix.M22 * vector.Y + matrix.M32 * vector.Z,
+                matrix.M13 * vector.X + matrix.M23 * vector.Y + matrix.M33 * vector.Z
             );
             return result;
         }
-
-        
 
         private List<Tuple<int, int>> DrawLine(int p1, int p2)
         {
@@ -44,7 +42,7 @@ namespace AKG1
             int x1 = projections[p2 - 1].Item1;
             int y0 = projections[p1 - 1].Item2;
             int y1 = projections[p2 - 1].Item2;
-            
+
             List<Tuple<int, int>> points = new();
             
             //Изменения координат
@@ -99,29 +97,22 @@ namespace AKG1
             return points;
         }
 
-        private void CalculateProjections(Pivot model)
+        private void CalculateProjections()
         {
-            
+            var model = new Pivot();
+            model.Translation = new Vector3(0, 0, 0);
+            model.Rotation = new Vector3(0, 0, 0.01f);
             Matrix4x4 modelMatrix = model.CreateModelMatrix();
-            
-            /*
-            var camera = new Pivot
-            {
-                Translation = new Vector3(1, 2, 3),
-                Rotation = new Vector3(0, 0, 0)
-            };
-            Matrix4x4 cameraMatrix = camera.CreateCameraMatrix();
-            */
-
             projections.Clear();
             for (int i = 0; i < parser._vertices.Count; i++)
             {
                 var curr = parser._vertices[i];
+                float scale = cameraZ / curr.Coordinates.Z;
                 Vector3 currPointVector = MultiplyVectorOnMatrix(modelMatrix, curr.Coordinates);
-                float scale = cameraZ / (cameraZ + currPointVector.Z); 
+                
                 parser._vertices[i].Coordinates = currPointVector;
-                var point = new Tuple<int, int, int>((int)((currPointVector.X * scale) + width / 2), (int)((currPointVector.Y * (-scale)) + height / 2), (int)currPointVector.Z);
-                projections.Add(point);     
+                
+                projections.Add(new Tuple<int, int, int>((int)((currPointVector.X / scale) + width / 2), (int)((currPointVector.Y / -scale) + height / 2), (int)currPointVector.Z));
             }
         }
 
@@ -137,12 +128,17 @@ namespace AKG1
 
             int bytes = Math.Abs(bmpData.Stride) * bmp.Height;
             byte[] screenMatrix = new byte[bytes];
-            Array.Fill<byte>(screenMatrix, 255);
+
+            System.Runtime.InteropServices.Marshal.Copy(ptr, screenMatrix, 0, bytes);
             int screenMatrixWidth = Math.Abs(bmpData.Stride);
+            for (int i = 0; i < bytes; i++)
+            {
+                screenMatrix[i] = 255;
+            }
 
             foreach (var curr in projections)
             {
-                if (curr.Item1 < width && curr.Item1 > 0 && curr.Item2 < height && curr.Item2 > 0)
+                if (curr.Item1 < bmp.Width && curr.Item1 > 0 && curr.Item2 < bmp.Height && curr.Item2 > 0)
                 {
                     int pos = (curr.Item1) * 4 + (curr.Item2) * screenMatrixWidth;
                     screenMatrix[pos] = 0;
@@ -152,72 +148,46 @@ namespace AKG1
                 }
             }
 
-            Parallel.ForEach(
-                    parser._faces,
-                   polygon =>
-                   {
-                       for (int i = 0; i < 3; i++)
-                       {
-                           foreach (var curr in DrawLine(polygon.Indexes[0], polygon.Indexes[(i + 1) % 3]))
-                           {
-                               SetColorToPixel(ref screenMatrix, 0, 0, 0, 255, curr.Item1, curr.Item2, screenMatrixWidth);
-                           }
-                       }
-                   }
-            );
-   
+
+            foreach (var polygon in parser._faces)
+            {
+                for(int i = 0; i < 3; i++)
+                {
+                    foreach (var curr in DrawLine(polygon.Indexes[0], polygon.Indexes[(i + 1) % 3]))
+                    {
+                        if (curr.Item1 < bmp.Width && curr.Item1 > 0 && curr.Item2 < bmp.Height && curr.Item2 > 0)
+                        {
+                            SetColorToPixel(ref screenMatrix, 0, 0, 0, 255, curr.Item1, curr.Item2, screenMatrixWidth);
+                        }
+                    }
+                }
+            }
             System.Runtime.InteropServices.Marshal.Copy(screenMatrix, 0, ptr, bytes);
             bmp.UnlockBits(bmpData);
-
-            pictureBox.Image = bmp;
-            Refresh();
+            pictureBox.CreateGraphics().DrawImage(bmp, rect);
         }
-
-    
 
         private void DrawButton_Click(object sender, EventArgs e)
         {
-            CalculateProjections(new Pivot
-            {
-                Scale = new Vector3(50, 50, 50),
-                Translation = new Vector3(0, -250, 0),
-                Rotation = new Vector3(0.0f, 0.0f, 0.0f)
-            });
-            
             while (true)
             {
-                CalculateProjections(new Pivot
-                {
-                    Scale = new Vector3(1, 1, 1),
-                    Translation = new Vector3(0, 0, 0),
-                    Rotation = new Vector3(0.05f, 0.0f, 0.0f)
-                });
+                CalculateProjections();
                 OutputImage();
-                
             }  
         }
 
         private static int MatrixPositionCalculation(int x, int y, int screenMatrixWidth)
         {
-            if (x < width && x > 0 && y < height && y > 0)
-            {
-                return x * 4 + y * screenMatrixWidth;
-            }
-            else
-            {
-                return -1;
-            }
+            return x * 4 + y * screenMatrixWidth;
         }
 
         private static void SetColorToPixel(ref byte[] screenMatrix, byte r, byte g, byte b, byte alpha, int x, int y, int screenMatrixWidth)
         {
             int pos = MatrixPositionCalculation(x, y, screenMatrixWidth);
-            if (pos != -1 && screenMatrix[pos] != b) {
-                screenMatrix[pos] = b;
-                screenMatrix[pos + 1] = g;
-                screenMatrix[pos + 2] = r;
-                screenMatrix[pos + 3] = alpha;
-            }
+            screenMatrix[pos] = b;
+            screenMatrix[pos + 1] = g;
+            screenMatrix[pos + 2] = r;
+            screenMatrix[pos + 3] = alpha;
         }
     }
 }
